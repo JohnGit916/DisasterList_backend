@@ -8,7 +8,7 @@ from config import Config
 from controllers.auth_controller import SignupResource, LoginResource, LogoutResource
 from controllers.incident_controller import IncidentListResource, IncidentResource
 from controllers.offer_controller import OfferListResource, OfferResource
-from controllers.responder_controller import ResponderIncidentResource  # ✅ Add this line
+from controllers.responder_controller import ResponderIncidentResource
 
 def create_app():
     app = Flask(__name__)
@@ -37,12 +37,23 @@ def create_app():
     api.add_resource(OfferListResource, '/offers')
     api.add_resource(OfferResource, '/offers/<int:id>')
 
-    # Responder routes (for many-to-many responder_incident table)
-    api.add_resource(ResponderIncidentResource, '/responders')  # ✅ Active route
+    # Responder routes
+    api.add_resource(ResponderIncidentResource, '/responders')
 
+    # Health check route
     @app.route('/')
     def home():
         return {'message': 'DisasterLink API is running'}
+
+    # TEMPORARY: Migration trigger route (REMOVE after running)
+    @app.route('/migrate')
+    def run_migrations():
+        from flask_migrate import upgrade
+        try:
+            upgrade()
+            return {'message': 'Migration applied successfully ✅'}
+        except Exception as e:
+            return {'error': str(e)}, 500
 
     return app
 

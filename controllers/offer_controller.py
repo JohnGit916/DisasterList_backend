@@ -56,7 +56,7 @@ class OfferListResource(Resource):
 
 class OfferResource(Resource):
     @jwt_required()
-    def put(self, id):
+    def patch(self, id):
         user_id = int(get_jwt_identity())
         offer = ResponseOffer.query.get(id)
 
@@ -77,9 +77,9 @@ class OfferResource(Resource):
         if incident.user_id == user_id:
             new_status = data.get('status')
             if new_status:
-                if new_status not in ['pending', 'accepted', 'rejected']:
+                if new_status.lower() not in ['pending', 'accepted', 'rejected']:
                     return {"error": "Invalid status value"}, 400
-                offer.status = new_status
+                offer.status = new_status.capitalize()
 
         # If neither condition applies, unauthorized
         if offer.user_id != user_id and incident.user_id != user_id:

@@ -4,6 +4,8 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from extensions import db
 from models.response_offer import ResponseOffer
 from models.incident_report import IncidentReport
+from models.user import User
+from datetime import datetime
 
 class OfferListResource(Resource):
     @jwt_required()
@@ -23,16 +25,20 @@ class OfferListResource(Resource):
         new_offer = ResponseOffer(
             message=message,
             incident_id=incident_id,
-            user_id=user_id
+            user_id=user_id,
+            timestamp=datetime.utcnow()
         )
         db.session.add(new_offer)
         db.session.commit()
+
+        user = User.query.get(user_id)
 
         return {
             "message": "Offer submitted successfully",
             "id": new_offer.id,
             "incident_id": incident_id,
             "user_id": user_id,
+            "username": user.username if user else None,
             "status": new_offer.status,
             "timestamp": new_offer.timestamp.isoformat()
         }, 201
@@ -44,19 +50,24 @@ class OfferListResource(Resource):
             query = query.filter_by(incident_id=incident_id)
 
         offers = query.all()
-        return [{
-            "id": o.id,
-            "message": o.message,
-            "incident_id": o.incident_id,
-            "user_id": o.user_id,
-            "status": o.status,
-            "timestamp": o.timestamp.isoformat()
-        } for o in offers], 200
+        result = []
+        for o in offers:
+            user = User.query.get(o.user_id)
+            result.append({
+                "id": o.id,
+                "message": o.message,
+                "incident_id": o.incident_id,
+                "user_id": o.user_id,
+                "username": user.username if user else None,
+                "status": o.status,
+                "timestamp": o.timestamp.isoformat()
+            })
+        return result, 200
 
 
 class OfferResource(Resource):
     @jwt_required()
-    def patch(self, id):
+    def put(self, id):
         user_id = int(get_jwt_identity())
         offer = ResponseOffer.query.get(id)
 
@@ -69,20 +80,20 @@ class OfferResource(Resource):
 
         data = request.get_json()
 
-        # Allow the offer creator to update their own message
-        if offer.user_id == user_id:
-            offer.message = data.get('message', offer.message)
+        updated = False
 
-        # Allow the incident owner to update offer status
-        if incident.user_id == user_id:
-            new_status = data.get('status')
-            if new_status:
-                if new_status.lower() not in ['pending', 'accepted', 'rejected']:
-                    return {"error": "Invalid status value"}, 400
-                offer.status = new_status.capitalize()
+        if offer.user_id == user_id and 'message' in data:
+            offer.message = data['message']
+            updated = True
 
-        # If neither condition applies, unauthorized
-        if offer.user_id != user_id and incident.user_id != user_id:
+        if incident.user_id == user_id and 'status' in data:
+            new_status = data['status']
+            if new_status not in ['pending', 'accepted', 'rejected']:
+                return {"error": "Invalid status value"}, 400
+            offer.status = new_status
+            updated = True
+
+        if not updated:
             return {'error': 'Unauthorized to update this offer'}, 403
 
         db.session.commit()
